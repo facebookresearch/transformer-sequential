@@ -18,7 +18,6 @@ import data
 import distributed
 from models import (
     compressive,
-    expire_span,
     feedback,
     transformer_seq,
 )
@@ -54,12 +53,6 @@ def get_parser():
         action="store_true",
         default=False,
         help="use the feedback transformer, computing one step at a time like RNNs",
-    )
-    parser.add_argument(
-        "--expire-span",
-        action="store_true",
-        default=False,
-        help="compute expiration span for each memory",
     )
     # optimization related
     parser.add_argument("--lr", type=float, default=0.03, help="learning rate")
@@ -174,7 +167,6 @@ def get_parser():
     distributed.add_args(parser)
     adaptive_span.add_args(parser)
     compressive.add_args(parser)
-    expire_span.add_args(parser)
     feedback.add_args(parser)
     return parser
 
@@ -224,8 +216,7 @@ def main(args):
     # create a model
     if args.feedback:
         model = feedback.FeedbackTransformer(args)
-    elif args.expire_span:
-        model = expire_span.ExpireSpan(args)
+
     elif args.compress:
         model = compressive.CompressiveTransformer(args)
     else:
@@ -373,8 +364,6 @@ def main(args):
                 logger.log("compute/lr", optimizer.param_groups[0]["lr"])
             if args.adapt_span:
                 adaptive_span.log(args, model, logger, stat_train)
-            if args.expire_span:
-                expire_span.log(args, model, logger, stat_train)
             if args.feedback:
                 feedback.log(args, model, logger, stat_train)
 

@@ -10,7 +10,7 @@
 bash ./data/get_enwik8.sh
 
 # Number of GPUs available on your machine
-ngpus=8
+ngpus=1
 
 # If you run out of GPU memory, use --split-batch.
 
