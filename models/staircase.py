@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from models.transformer_seq import (FeedForwardLayer, MultiHeadSeqAttention,
                                     TransformerOutput)
-from models.utils import pos_emb, skew, unskew, parse_layerwise
+from models.utils import pos_emb, skew, unskew
 
 
 class VARIANT(IntEnum):
@@ -65,7 +65,15 @@ def add_args(parser):
         default=False,
         help="init h_prev with 0s to ensure the transformer module has fixed forward length",
     )
-
+    parser.add_argument(
+        "--out-drop",
+        type=float,
+        default=0,
+        help="insert a dropout before the last linear layer",
+    )
+    parser.add_argument(
+        "--emb-drop", type=float, default=0, help="dropout on input embedding"
+    )
     parser.add_argument("--staircase-variant", type=int,
                         default=1, help="1, 2, 3, 4")
 
@@ -81,14 +89,10 @@ class StaircaseSeqAttention(nn.Module):
     def __init__(self, args):
         super(StaircaseSeqAttention, self).__init__()
         self.args = args
-        if args.attn_drop < 0:
-            self.dropout = nn.Dropout(args.dropout)
-        else:
-            self.dropout = nn.Dropout(args.attn_drop)
+        self.dropout = nn.Dropout(args.dropout)
 
         self.key_pe, self.val_pe = None, None
-        if args.attn_key_mode != "context":
-            self.key_pe = pos_emb(args, (1, args.head_dim, args.attn_lim))
+        self.key_pe = pos_emb(args, (1, args.head_dim, args.attn_lim))
 
     def forward(self, query, key, value):
         # query = B x M x H
@@ -103,29 +107,19 @@ class StaircaseSeqAttention(nn.Module):
         key_pe, val_pe = self.key_pe, self.val_pe
 
         attn = 0
-        if self.args.attn_key_mode in ["both", "context"]:
-            # compute attention from context
-            # B x M  x L (src)
-            attn = torch.matmul(query, key.transpose(-1, -2))
 
-        if self.args.attn_key_mode in ["both", "position"]:
-            # compute the effect of position embedding
-            # cut key_pe to be the size of L
-            L_size = attn.size(-1)
-            attn_pos = torch.matmul(query, key_pe[:, :, -L_size:])  # B x M x L
-            attn_pos = skew(attn_pos, 0)  # B x M x (N + L)
-            attn_pos = attn_pos[:, :, -L_size - 1: -1]  # B x M x L
-            attn = attn + attn_pos
+        attn = torch.matmul(query, key.transpose(-1, -2))
+
+        L_size = attn.size(-1)
+        attn_pos = torch.matmul(query, key_pe[:, :, -L_size:])  # B x M x L
+        attn_pos = skew(attn_pos, 0)  # B x M x (N + L)
+        attn_pos = attn_pos[:, :, -L_size - 1: -1]  # B x M x L
+        attn = attn + attn_pos
         attn = attn + mask_causal
 
-        if self.args.pers > 0:
-            attn, out_mem = self.pers_mem(query, attn)
-        else:
-            attn = attn / math.sqrt(self.args.head_dim)  # B x M X L
-            attn = F.softmax(attn, dim=-1)
+        attn = attn / math.sqrt(self.args.head_dim)  # B x M X L
+        attn = F.softmax(attn, dim=-1)
 
-        if self.args.vis:
-            self.attn_map_snapshot = attn.detach().cpu()
         attn = self.dropout(attn)  # B x M X L
 
         out = 0
@@ -133,9 +127,6 @@ class StaircaseSeqAttention(nn.Module):
         # attn_cont = skew(attn, 0)  # B x M X (L+M)
         # out = out + torch.matmul(attn_cont, value)  # B x M x H
         out = out + torch.matmul(attn, value)  # B x S x H
-
-        if self.args.pers > 0:
-            out = out + out_mem
 
         return out, aux_loss
 
@@ -195,18 +186,11 @@ class TransformerMod(nn.Module):
 
     def build_layers(self):
         self.layers = nn.ModuleList()
-        if self.args.share_layers:
-            self.layers.append(TransformerModLayer(self.args, 0))
-        else:
-            for l in range(self.args.nlayers):
-                args_copy = parse_layerwise(self.args, l)
-                self.layers.append(TransformerModLayer(args_copy, l))
+        for l in range(self.args.nlayers):
+            self.layers.append(TransformerModLayer(self.args, l))
 
     def get_layer(self, layer_ind):
-        if self.args.share_layers:
-            return self.layers[0]
-        else:
-            return self.layers[layer_ind]
+        return self.layers[layer_ind]
 
     def forward(self, h, context):
         # h : B x S x H
@@ -233,7 +217,6 @@ class StaircaseModel(nn.Module):
         self.hidden_size = self.args.hid_sz
         self.variant = VARIANT(self.args.staircase_variant)
 
-        assert self.variant < VARIANT.VARIANT_THREE
         assert self.mem_size % self.fix_staircase_size_forward == 0
         assert self.staircase_size % self.fix_staircase_size_forward == 0
         self.validation_staircase_size_forward = (
@@ -243,9 +226,6 @@ class StaircaseModel(nn.Module):
         self.in_emb = nn.Embedding(args.vocab_sz, args.hid_sz)
 
         self.out = TransformerOutput(args)
-        if args.tied:
-            self.out.out_emb.weight = self.in_emb.weight
-
         if args.emb_drop > 0:
             self.emb_dropout = nn.Dropout(args.emb_drop)
         if args.out_drop > 0:

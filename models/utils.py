@@ -37,35 +37,3 @@ def unskew(X):
 def pos_emb(args, sizes):
     X = torch.randn(*sizes)
     return nn.Parameter(X)
-
-def parse_layerwise(args, l):
-    args_copy = Namespace(**vars(args))
-    use_copy = False
-    if args.attn_lim_layerwise != "":
-        lims = args.attn_lim_layerwise.split(":")
-        args_copy.attn_lim = int(lims[l])
-        use_copy = True
-    if args.inner_hid_sz_layerwise != "":
-        sizes = args.inner_hid_sz_layerwise.split(":")
-        args_copy.inner_hid_sz = int(sizes[l])
-        use_copy = True
-    if args.attn_key_mode_layerwise != "":
-        mode = args.attn_key_mode_layerwise.split(":")
-        args_copy.attn_key_mode = mode[l]
-        use_copy = True
-    if args.nheads_layerwise != "":
-        nheads = args.nheads_layerwise.split(":")
-        args_copy.nheads = int(nheads[l])
-        use_copy = True
-    if args.head_dim_layerwise != "":
-        x = args.head_dim_layerwise.split(":")
-        args_copy.head_dim = int(x[l])
-        use_copy = True
-    if args.expire_span_layerwise != "":
-        assert args.expire_span
-        x = args.expire_span_layerwise.split(":")
-        args_copy.expire_span = x[l] == "1"
-        use_copy = True
-    if not use_copy:
-        args_copy = args
-    return args_copy
