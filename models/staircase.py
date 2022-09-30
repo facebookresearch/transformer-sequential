@@ -1,6 +1,11 @@
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+#
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import argparse
 import math
-import warnings
 from enum import IntEnum
 
 import torch
@@ -9,7 +14,7 @@ import torch.nn.functional as F
 
 from models.transformer_seq import (FeedForwardLayer, MultiHeadSeqAttention,
                                     TransformerOutput)
-from models.utils import pos_emb, skew, unskew
+from models.utils import pos_emb, skew
 
 
 class VARIANT(IntEnum):
