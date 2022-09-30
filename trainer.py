@@ -88,7 +88,11 @@ def train_batch(
     out, h_cache, aux_loss = model(X, h_cache, Y)
 
     for i in range(len(h_cache)):
-        h_cache[i] = h_cache[i].detach()
+        if isinstance(h_cache[i], list):
+            for j in range(len(h_cache[i])):
+                h_cache[i][j] = h_cache[i][j].detach()
+        else:
+            h_cache[i] = h_cache[i].detach()
 
     loss, aux_loss, err = compute_total_loss(args, out, Y, corpus, aux_loss)
 
