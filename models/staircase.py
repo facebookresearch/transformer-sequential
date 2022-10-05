@@ -4,7 +4,6 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import argparse
 import math
 from enum import IntEnum
 
@@ -15,22 +14,6 @@ import torch.nn.functional as F
 from models.transformer_seq import (FeedForwardLayer, MultiHeadSeqAttention,
                                     TransformerOutput)
 from models.utils import pos_emb, skew
-
-
-class VARIANT(IntEnum):
-    # staircase transformers
-    VARIANT_ONE = 1
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ("yes", "true", "t", "y", "1"):
-        return True
-    elif v.lower() in ("no", "false", "f", "n", "0"):
-        return False
-    else:
-        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 
 def add_args(parser):
@@ -59,12 +42,6 @@ def add_args(parser):
         help="max number of fresh tokens considered during validation",
     )
     parser.add_argument(
-        "--staircase-split-query",
-        action="store_true",
-        default=False,
-        help="query and key, value are not the same size",
-    )
-    parser.add_argument(
         "--staircase-module-fixed-length",
         action="store_true",
         default=False,
@@ -79,8 +56,6 @@ def add_args(parser):
     parser.add_argument(
         "--emb-drop", type=float, default=0, help="dropout on input embedding"
     )
-    parser.add_argument("--staircase-variant", type=int,
-                        default=1, help="1, 2, 3, 4")
 
 
 class StaircaseSeqAttention(nn.Module):
@@ -129,8 +104,6 @@ class StaircaseSeqAttention(nn.Module):
 
         out = 0
 
-        # attn_cont = skew(attn, 0)  # B x M X (L+M)
-        # out = out + torch.matmul(attn_cont, value)  # B x M x H
         out = out + torch.matmul(attn, value)  # B x S x H
 
         return out, aux_loss
@@ -220,7 +193,6 @@ class StaircaseModel(nn.Module):
         self.staircase_size = self.args.staircase_size
         self.mem_size = self.args.mem_sz
         self.hidden_size = self.args.hid_sz
-        self.variant = VARIANT(self.args.staircase_variant)
 
         assert self.mem_size % self.fix_staircase_size_forward == 0
         assert self.staircase_size % self.fix_staircase_size_forward == 0
@@ -320,31 +292,28 @@ class StaircaseModel(nn.Module):
                 prev_output = prev_output[:,
                                           self.fix_staircase_size_forward:, :]
             # input to the first layer of the model
-            if self.variant == VARIANT.VARIANT_ONE:
-                context = self.assemble_context(
-                    cache[0], prev_output, new_tokens)
-                h = self.assemble_query(prev_output, new_tokens)
-                assert context.size(1) <= self.staircase_size
-                # forward into layers
-                cache_for_next = []
-                for layer in range(self.args.nlayers):
-                    # only forward size get updated from the context as well
-                    h = self.transformer.get_layer(layer)(h, context)
-                    if h.size(1) == context.size(1):
-                        # self-attention
-                        context = h
-                    elif layer + 1 < self.args.nlayers:
-                        context = torch.cat([cache[layer + 1], h], dim=1)
-                    # put into cache
-                    if cache_id >= 0:
-                        cache_for_next.append(h)
-                # the output from the last layer
-                prev_output = h
+            context = self.assemble_context(
+                cache[0], prev_output, new_tokens)
+            h = self.assemble_query(prev_output, new_tokens)
+            assert context.size(1) <= self.staircase_size
+            # forward into layers
+            cache_for_next = []
+            for layer in range(self.args.nlayers):
+                # only forward size get updated from the context as well
+                h = self.transformer.get_layer(layer)(h, context)
+                if h.size(1) == context.size(1):
+                    # self-attention
+                    context = h
+                elif layer + 1 < self.args.nlayers:
+                    context = torch.cat([cache[layer + 1], h], dim=1)
                 # put into cache
-                if len(cache_for_next) > 0:
-                    h_prev[cache_id] = cache_for_next
-            else:
-                raise RuntimeError("Variant 3 and 4 is in another file!")
+                if cache_id >= 0:
+                    cache_for_next.append(h)
+            # the output from the last layer
+            prev_output = h
+            # put into cache
+            if len(cache_for_next) > 0:
+                h_prev[cache_id] = cache_for_next
 
             start_idx = end_idx
             # put into output
@@ -354,21 +323,19 @@ class StaircaseModel(nn.Module):
                     - self.staircase_size // self.fix_staircase_size_forward
                     + 1
                 )
-                if self.variant == VARIANT.VARIANT_ONE:
-                    output[
-                        :,
-                        offset
-                        * self.fix_staircase_size_forward: offset
-                        * self.fix_staircase_size_forward
-                        + prev_output.size(1),
-                        :,
-                    ] = prev_output
+                output[
+                    :,
+                    offset
+                    * self.fix_staircase_size_forward: offset
+                    * self.fix_staircase_size_forward
+                    + prev_output.size(1),
+                    :,
+                ] = prev_output
         out = output
         if self.args.pre_norm:
             out = self.out_norm(out)
         if self.args.out_drop > 0:
             out = self.out_dropout(out)
         out = self.out(out, target)
-        # TODO: need to separate the output for prediction from the output for
         # feeding to the next transformer step.
         return out, h_prev, 0.0
