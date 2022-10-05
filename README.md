@@ -1,9 +1,10 @@
 # transformer-sequential
 
-This repo contains the code for two papers:
+This repo contains the code for three papers:
 
 - Feedback Transformer
 - Expire-Span
+- Staircase Transformer
 
 The training code is structured for long sequential modeling with Transformer-like architectures.
 
