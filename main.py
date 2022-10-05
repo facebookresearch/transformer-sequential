@@ -21,6 +21,7 @@ from models import (
     expire_span,
     feedback,
     transformer_seq,
+    staircase,
 )
 from modules import adaptive_span
 from trainer import train
@@ -60,6 +61,12 @@ def get_parser():
         action="store_true",
         default=False,
         help="compute expiration span for each memory",
+    )
+    parser.add_argument(
+        "--staircase",
+        action="store_true",
+        default=False,
+        help="use the staircase transformer",
     )
     # optimization related
     parser.add_argument("--lr", type=float, default=0.03, help="learning rate")
@@ -176,6 +183,7 @@ def get_parser():
     compressive.add_args(parser)
     expire_span.add_args(parser)
     feedback.add_args(parser)
+    staircase.add_args(parser)
     return parser
 
 
@@ -228,6 +236,8 @@ def main(args):
         model = expire_span.ExpireSpan(args)
     elif args.compress:
         model = compressive.CompressiveTransformer(args)
+    elif args.staircase:
+        model = staircase.StaircaseModel(args)
     else:
         model = transformer_seq.TransformerSeq(args)
     model.to(args.device)
