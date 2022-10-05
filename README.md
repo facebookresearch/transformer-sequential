@@ -1,6 +1,7 @@
 # transformer-sequential
 
 This repo contains the code for two papers:
+
 - Feedback Transformer
 - Expire-Span
 
@@ -13,6 +14,7 @@ You will need a CUDA-enabled GPU to run the code.
 ## Setup
 
 Run the following:
+
 ```
 pip install -r requirements.txt
 ```
@@ -36,7 +38,6 @@ bash experiments/feedback/enwik8.sh
 ```
 
 #### Algorithmic
-
 
 |Model|3 Variable|5 Variable|
 |-|-|-|
@@ -80,6 +81,24 @@ bash experiments/expire_span/enwik8.sh
 bash experiments/expire_span/object_collision_16k.sh
 bash experiments/expire_span/object_collision_32k.sh
 bash experiments/expire_span/object_collision_64k.sh
+```
+
+## Staircase
+
+Introduced in [Staircase Attention for Recurrent Processing of Sequences](https://arxiv.org/pdf/2106.04279.pdf).
+Note this algorithmic task in this repo is slightly different from what was used in the paper, while the number might not exactly match, it does show the same trend as in the paper. And the model implementation / hyperparameter remains the same.
+
+### Algorithmic
+
+|Model|Test|
+|-|-|
+|Transformer|58.44%|
+|Staircase Transformer| 3.6%|
+
+_Numbers are % Accuracy on Test_
+
+```
+bash experiments/staircase/algorithmic_3var.sh
 ```
 
 ## License
