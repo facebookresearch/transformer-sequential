@@ -98,7 +98,7 @@ Note this algorithmic task in this repo is slightly different from what was used
 |Transformer|58.44%|
 |Staircase Transformer| 3.6%|
 
-_Numbers are % Accuracy on Test_
+_Numbers are % error rate on Test_
 
 ```
 bash experiments/staircase/algorithmic_3var.sh
