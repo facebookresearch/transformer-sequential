@@ -89,7 +89,9 @@ bash experiments/expire_span/object_collision_64k.sh
 Introduced in [Staircase Attention for Recurrent Processing of Sequences](https://arxiv.org/pdf/2106.04279.pdf).
 Note this algorithmic task in this repo is slightly different from what was used in the paper, while the number might not exactly match, it does show the same trend as in the paper. And the model implementation / hyperparameter remains the same.
 
-### Algorithmic
+### Running Experiments from the Paper
+
+#### Algorithmic
 
 |Model|Test|
 |-|-|
